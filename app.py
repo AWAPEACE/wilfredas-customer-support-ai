@@ -10,6 +10,7 @@ with open(KNOWLEDGE_BASE_FILE, "r", encoding="utf-8") as file:
 
 conversation_history = []
 
+
 def get_ai_response(user_message):
     api_key = os.getenv("GROQ_API_KEY")
 
@@ -77,6 +78,7 @@ HTML = """
     <title>Wilfreda's Collection - Customer Support</title>
 
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <style>
         body {
             margin: 0;
@@ -180,10 +182,170 @@ HTML = """
     </div>
 
     <div class="input-area">
+
         <input
             id="input"
             placeholder="Type your message..."
             onkeydown="if(event.key === 'Enter') sendMessage()"
         >
 
-        <button
+        <button id="send" onclick="sendMessage()">
+            Send
+        </button>
+
+    </div>
+
+</div>
+
+<script>
+
+async function sendMessage() {
+
+    const input = document.getElementById("input");
+    const button = document.getElementById("send");
+    const messages = document.getElementById("messages");
+
+    const text = input.value.trim();
+
+    if (!text) {
+        return;
+    }
+
+    const userMessage = document.createElement("div");
+
+    userMessage.className = "message user";
+    userMessage.textContent = text;
+
+    messages.appendChild(userMessage);
+
+    input.value = "";
+    button.disabled = true;
+
+    try {
+
+        const response = await fetch("/chat", {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                message: text
+            })
+        });
+
+        const data = await response.json();
+
+        const botMessage = document.createElement("div");
+
+        botMessage.className = "message bot";
+        botMessage.textContent = data.response;
+
+        messages.appendChild(botMessage);
+
+        messages.scrollTop = messages.scrollHeight;
+
+    } catch (error) {
+
+        const botMessage = document.createElement("div");
+
+        botMessage.className = "message bot";
+        botMessage.textContent =
+            "Sorry, I couldn't connect to the AI service.";
+
+        messages.appendChild(botMessage);
+    }
+
+    button.disabled = false;
+    input.focus();
+}
+
+</script>
+
+</body>
+</html>
+"""
+
+
+class ChatHandler(BaseHTTPRequestHandler):
+
+    def do_GET(self):
+
+        if self.path == "/":
+
+            self.send_response(200)
+
+            self.send_header(
+                "Content-Type",
+                "text/html; charset=utf-8"
+            )
+
+            self.end_headers()
+
+            self.wfile.write(
+                HTML.encode("utf-8")
+            )
+
+    def do_POST(self):
+
+        if self.path == "/chat":
+
+            length = int(
+                self.headers.get("Content-Length", 0)
+            )
+
+            body = self.rfile.read(length)
+
+            data = json.loads(
+                body.decode("utf-8")
+            )
+
+            user_message = data.get(
+                "message",
+                ""
+            )
+
+            answer = get_ai_response(
+                user_message
+            )
+
+            response = json.dumps({
+                "response": answer
+            })
+
+            self.send_response(200)
+
+            self.send_header(
+                "Content-Type",
+                "application/json"
+            )
+
+            self.end_headers()
+
+            self.wfile.write(
+                response.encode("utf-8")
+            )
+
+
+server = HTTPServer(
+    ("0.0.0.0", int(os.environ.get("PORT", 8501))),
+    ChatHandler
+)
+
+
+print()
+print("==============================================")
+print("Wilfreda's Collection Customer Support AI")
+print("==============================================")
+print()
+print("Chat interface is running!")
+print()
+print("Open this address in your browser:")
+print("http://127.0.0.1:8501")
+print()
+print("Press CTRL+C to stop the server.")
+print()
+
+
+server.serve_forever()
